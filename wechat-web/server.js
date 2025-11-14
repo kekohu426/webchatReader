@@ -135,17 +135,13 @@ function getSettings(req) {
 }
 
 // 允许通过代理的域名
-const ALLOWED_PROXY_HOSTS = new Set([
-  'mp.weixin.qq.com',
-  'mmbiz.qpic.cn',
-  'res.wx.qq.com',
-  'wx.qlogo.cn'
-]);
+const ALLOWED_SUFFIXES = ['qpic.cn', 'wx.qq.com', 'qlogo.cn'];
 
 function isAllowedUrl(u) {
   try {
     const parsed = new URL(u);
-    return ALLOWED_PROXY_HOSTS.has(parsed.hostname);
+    if (parsed.hostname === 'mp.weixin.qq.com') return true;
+    return ALLOWED_SUFFIXES.some(suf => parsed.hostname.endsWith(suf));
   } catch {
     return false;
   }
@@ -172,6 +168,25 @@ function rewriteToProxy(u, pageUrl) {
   return `/api/proxy?url=${enc}${page}`;
 }
 
+function addWxFmtIfNeeded(url, fmtHint) {
+  try {
+    const p = new URL(url);
+    const host = p.hostname;
+    if (!ALLOWED_SUFFIXES.some(s => host.endsWith(s))) return url;
+    // ensure wx_fmt param
+    const hasFmt = p.searchParams.has('wx_fmt');
+    if (!hasFmt) {
+      const fmt = (fmtHint || '').toLowerCase();
+      const ext = (p.pathname.split('.').pop() || '').toLowerCase();
+      const chosen = fmt || (ext.match(/^(jpeg|jpg|png|gif|webp)$/) ? (ext === 'jpg' ? 'jpeg' : ext) : 'jpeg');
+      p.searchParams.set('wx_fmt', chosen);
+    }
+    return p.toString();
+  } catch {
+    return url;
+  }
+}
+
 function processArticleHtml(html, originalUrl) {
   const $ = cheerio.load(html, { decodeEntities: false });
   // Remove heavy scripts to avoid delays
@@ -181,7 +196,9 @@ function processArticleHtml(html, originalUrl) {
     const $el = $(el);
     const ds = $el.attr('data-src') || $el.attr('data-original') || $el.attr('data-backup-src') || $el.attr('data-raw-src');
     const src = $el.attr('src');
-    const finalSrc = toAbsoluteUrl(originalUrl, ds || src);
+    let finalSrc = toAbsoluteUrl(originalUrl, ds || src);
+    const fmtHint = $el.attr('data-type') || $el.attr('data-wx_fmt') || '';
+    finalSrc = addWxFmtIfNeeded(finalSrc, fmtHint);
     if (finalSrc) {
       const proxied = rewriteToProxy(finalSrc, originalUrl);
       $el.attr('src', proxied);
@@ -203,7 +220,8 @@ function processArticleHtml(html, originalUrl) {
     if (raw) {
       const parts = raw.split(',').map(s => s.trim()).filter(Boolean).map(part => {
         const [url, size] = part.split(' ').filter(Boolean);
-        const abs = toAbsoluteUrl(originalUrl, url);
+        let abs = toAbsoluteUrl(originalUrl, url);
+        abs = addWxFmtIfNeeded(abs, '');
         const prox = rewriteToProxy(abs, originalUrl);
         return size ? `${prox} ${size}` : prox;
       });
@@ -211,6 +229,20 @@ function processArticleHtml(html, originalUrl) {
       $el.removeAttr('data-srcset');
       $el.removeAttr('data-original-set');
       $el.removeAttr('data-dsrc');
+    }
+  });
+  // Rewrite inline background-image URLs
+  $('[style]').each((_, el) => {
+    const $el = $(el);
+    const style = $el.attr('style') || '';
+    const replaced = style.replace(/url\(("|')?(.*?)\1\)/g, (_, __, url) => {
+      let abs = toAbsoluteUrl(originalUrl, url);
+      abs = addWxFmtIfNeeded(abs, '');
+      const prox = rewriteToProxy(abs, originalUrl);
+      return `url('${prox}')`;
+    });
+    if (replaced !== style) {
+      $el.attr('style', replaced);
     }
   });
   // Add base for relative links (if any)
@@ -612,10 +644,11 @@ app.get('/api/proxy', async (req, res) => {
     }
     let fetchUrl = target;
     try {
-      const h = new URL(target).hostname;
-      if (h === 'mmbiz.qpic.cn') {
+      const u = new URL(target);
+      const h = u.hostname;
+      if (h.endsWith('qpic.cn')) {
         // 使用微信内部图片获取端点，提升成功率
-        fetchUrl = `https://mp.weixin.qq.com/mp/getimg?url=${encodeURIComponent(target)}`;
+        fetchUrl = `https://mp.weixin.qq.com/mp/getimg?url=${encodeURIComponent(u.toString())}`;
       }
     } catch {}
 
