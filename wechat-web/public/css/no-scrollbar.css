@@ -1,0 +1,125 @@
+/* ==================== 彻底隐藏所有滚动条 ==================== */
+/* 此文件必须最后加载，确保优先级最高 */
+
+/* 全局隐藏 - 所有浏览器 */
+* {
+  scrollbar-width: none !important; /* Firefox */
+  -ms-overflow-style: none !important; /* IE/Edge */
+}
+
+*::-webkit-scrollbar {
+  width: 0 !important;
+  height: 0 !important;
+  display: none !important;
+  background: transparent !important;
+}
+
+*::-webkit-scrollbar-track {
+  display: none !important;
+}
+
+*::-webkit-scrollbar-thumb {
+  display: none !important;
+}
+
+/* 针对 HTML 和 Body */
+html,
+body {
+  scrollbar-width: none !important;
+  -ms-overflow-style: none !important;
+  overflow: auto !important; /* 保持可滚动 */
+}
+
+html::-webkit-scrollbar,
+body::-webkit-scrollbar {
+  width: 0 !important;
+  height: 0 !important;
+  display: none !important;
+}
+
+/* 针对所有可滚动容器 */
+.sidebar,
+.main-content,
+.detail-content,
+.article-detail,
+.article-list,
+.article-container,
+.favorites-page,
+.page-container,
+.account-list,
+.kb-articles-list,
+div[class*="list"],
+div[class*="content"],
+div[class*="container"],
+section,
+article,
+aside,
+main,
+nav {
+  scrollbar-width: none !important;
+  -ms-overflow-style: none !important;
+}
+
+.sidebar::-webkit-scrollbar,
+.main-content::-webkit-scrollbar,
+.detail-content::-webkit-scrollbar,
+.article-detail::-webkit-scrollbar,
+.article-list::-webkit-scrollbar,
+.article-container::-webkit-scrollbar,
+.favorites-page::-webkit-scrollbar,
+.page-container::-webkit-scrollbar,
+.account-list::-webkit-scrollbar,
+.kb-articles-list::-webkit-scrollbar,
+div[class*="list"]::-webkit-scrollbar,
+div[class*="content"]::-webkit-scrollbar,
+div[class*="container"]::-webkit-scrollbar,
+section::-webkit-scrollbar,
+article::-webkit-scrollbar,
+aside::-webkit-scrollbar,
+main::-webkit-scrollbar,
+nav::-webkit-scrollbar {
+  width: 0 !important;
+  height: 0 !important;
+  display: none !important;
+}
+
+/* iframe 内部滚动条 */
+iframe {
+  scrollbar-width: none !important;
+  -ms-overflow-style: none !important;
+}
+
+iframe::-webkit-scrollbar {
+  width: 0 !important;
+  height: 0 !important;
+  display: none !important;
+}
+
+/* 确保滚动功能正常 */
+html,
+body,
+.sidebar,
+.detail-content,
+.page-container {
+  overflow: auto !important;
+}
+
+/* 移动端适配 */
+@media (max-width: 768px) {
+  * {
+    scrollbar-width: none !important;
+    -ms-overflow-style: none !important;
+  }
+  
+  *::-webkit-scrollbar {
+    display: none !important;
+  }
+}
+
+/* 打印时隐藏 */
+@media print {
+  *::-webkit-scrollbar {
+    display: none !important;
+  }
+}
+

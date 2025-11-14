@@ -1,0 +1,823 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <meta name="description" content="微信公众号文章抓取工具 - 支持桌面端和移动端">
+  <meta name="theme-color" content="#1890ff">
+  <title>微信公众号文章抓取工具</title>
+  <link rel="stylesheet" href="/css/style.css?v=2.9.0">
+  <link rel="stylesheet" href="/css/favorites.css?v=2.9.0">
+  <link rel="stylesheet" href="/css/reading-enhancer.css?v=2.9.0">
+  <!-- 最后加载：强制隐藏所有滚动条 -->
+  <link rel="stylesheet" href="/css/no-scrollbar.css?v=2.9.0">
+  <!-- 移动端优化 -->
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+</head>
+<body>
+  <!-- 移动端顶部导航栏 -->
+  <header class="mobile-header">
+    <button class="menu-toggle" id="menu-toggle">☰</button>
+    <h1 class="app-title">文章阅读器</h1>
+    <button class="settings-btn" id="mobile-settings-btn">⚙️</button>
+  </header>
+
+  <div class="container">
+    <!-- 左侧边栏：导航 + 公众号管理 -->
+    <aside class="sidebar" id="sidebar">
+      <!-- 移动端关闭按钮 -->
+      <button class="sidebar-close" id="sidebar-close">✕</button>
+      
+      <!-- 应用标题 -->
+      <div class="sidebar-brand">
+        <div class="brand-icon">📚</div>
+        <div class="brand-text">
+          <div class="brand-title">微信阅读器</div>
+          <div class="brand-subtitle">优雅的阅读体验</div>
+        </div>
+      </div>
+      
+      <!-- 订阅管理区 -->
+      <div class="subscription-section">
+      <!-- 添加公众号 -->
+      <div class="account-add">
+          <div class="account-add-header">
+            <h3>📚 我的订阅</h3>
+            <span id="login-status" class="status-badge not-logged-in">未登录</span>
+          </div>
+          <input type="text" id="account-name" placeholder="🔍 搜索并添加公众号..." />
+          <div class="account-add-buttons">
+            <button id="btn-add-account" class="btn-primary">➕ 添加</button>
+            <button id="btn-batch-import" class="btn-secondary">📥 批量</button>
+          </div>
+      </div>
+      
+      <!-- 批量操作栏 -->
+      <div class="batch-actions" id="batch-actions" style="display: none;">
+        <div class="batch-info">
+          <label>
+            <input type="checkbox" id="select-all-accounts" />
+            全选
+          </label>
+          <span id="selected-count">已选 0 个</span>
+        </div>
+        <div class="batch-buttons">
+          <button id="btn-batch-fetch" class="btn-primary btn-sm">获取文章</button>
+          <button id="btn-batch-subscribe" class="btn-secondary btn-sm">订阅设置</button>
+        </div>
+      </div>
+      
+      <!-- 公众号列表 -->
+      <div class="account-list">
+        <ul id="accounts-list"></ul>
+          <div style="display: none;"><span id="account-count">0</span></div>
+        </div>
+      </div>
+      
+      <!-- 分割线 -->
+      <div class="sidebar-divider"></div>
+      
+      <!-- 左侧导航菜单 -->
+      <nav class="sidebar-nav">
+        <a href="#" data-page="accounts" class="nav-item active">
+          <span class="nav-icon">📚</span>
+          <span class="nav-text">我的订阅</span>
+        </a>
+        <a href="#" data-page="knowledge" class="nav-item">
+          <span class="nav-icon">⭐</span>
+          <span class="nav-text">我的收藏</span>
+        </a>
+        <a href="#" data-page="settings" class="nav-item">
+          <span class="nav-icon">⚙️</span>
+          <span class="nav-text">设置</span>
+        </a>
+      </nav>
+    </aside>
+    
+    <!-- 主内容区：多页面容器 -->
+    <main class="main-content">
+      <!-- 页面1: 公众号管理（文章列表） -->
+      <div class="page-container" id="page-accounts" style="display: block;">
+        <!-- 文章列表视图 -->
+        <div class="articles-view" id="articles-view">
+        <div class="articles-header">
+          <h2 id="current-account-name">请选择公众号</h2>
+          <div class="header-actions">
+            <button id="btn-import-article" class="btn-primary">
+              <span class="desktop-only">📥 导入文章</span>
+              <span class="mobile-only">📥 导入</span>
+            </button>
+            <button id="btn-export" class="btn-success" disabled>
+              <span class="desktop-only">📄 导出Excel</span>
+              <span class="mobile-only">📄 导出</span>
+            </button>
+          </div>
+        </div>
+        
+        <!-- 搜索和排序 -->
+        <div class="filter-bar">
+          <div class="search-box">
+            <input type="text" id="search-input" placeholder="🔍 搜索文章标题、作者、内容..." />
+            <span class="search-icon">⌘K</span>
+          </div>
+          <select id="sort-order" class="sort-select">
+            <option value="desc">⏰ 最新优先</option>
+            <option value="asc">📅 最早优先</option>
+          </select>
+        </div>
+        
+        <!-- 文章列表 -->
+        <div class="articles-list" id="articles-list">
+          <div class="empty-state">
+            <div class="empty-icon">📖</div>
+            <p>请在左侧选择公众号</p>
+            <p class="empty-hint">开始探索优质内容</p>
+          </div>
+        </div>
+        
+        <!-- 加载更多 -->
+        <div class="load-more-container">
+          <button id="btn-load-more" class="btn-primary btn-load-more" disabled>📄 加载更多文章</button>
+        </div>
+      </div>
+      
+      <!-- 文章详情视图 - 优化版 -->
+      <div class="article-detail" id="article-detail" style="display: none;">
+        <!-- 阅读工具栏 -->
+        <div class="reading-toolbar">
+          <div class="toolbar-left">
+            <button id="btn-back" class="btn-back">
+              <span class="icon">←</span>
+              <span class="text">返回</span>
+            </button>
+          </div>
+          
+          <div class="toolbar-right">
+            <button id="btn-font-decrease" class="btn-toolbar" title="减小字体">A-</button>
+            <button id="btn-font-increase" class="btn-toolbar" title="增大字体">A+</button>
+            <button id="btn-width-toggle" class="btn-toolbar" title="调整宽度">⇔</button>
+            <button id="btn-immersive-mode" class="btn-toolbar" title="沉浸模式">📖</button>
+          </div>
+        </div>
+        
+        <!-- 阅读进度条 -->
+        <div class="reading-progress-bar">
+          <div class="reading-progress-fill" id="reading-progress-fill"></div>
+        </div>
+        
+        <!-- 文章内容容器 -->
+        <div class="detail-content" id="detail-content-wrapper">
+          <article class="article-container" id="article-container">
+            <header class="article-header-section">
+              <h1 id="detail-title" class="article-title-main"></h1>
+              <div class="article-meta-main">
+                <span class="meta-item" id="detail-author">
+                  <span class="meta-icon">✍️</span>
+                  <span class="meta-text"></span>
+                </span>
+                <span class="meta-item" id="detail-date">
+                  <span class="meta-icon">📅</span>
+                  <span class="meta-text"></span>
+                </span>
+                <span class="meta-item" id="detail-read-time">
+                  <span class="meta-icon">⏱️</span>
+                  <span class="meta-text">阅读约 5 分钟</span>
+                </span>
+              </div>
+            </header>
+            
+            <div class="article-body-section">
+              <iframe id="detail-iframe" frameborder="0"></iframe>
+            </div>
+          </article>
+        </div>
+        
+        <!-- 返回顶部按钮 -->
+        <button id="btn-back-to-top" class="btn-back-to-top" style="display: none;">
+          ↑
+        </button>
+      </div>
+      </div><!-- end page-accounts -->
+      
+      <!-- 页面2: 我的收藏 -->
+      <div class="page-container favorites-page" id="page-knowledge" style="display: none;">
+        <!-- 顶部横幅 -->
+        <div class="favorites-hero">
+          <div class="hero-content">
+            <div class="hero-text">
+              <h1 class="hero-title">
+                <span class="hero-icon">⭐</span>
+                我的收藏
+              </h1>
+              <p class="hero-subtitle">珍藏精华内容，随时回顾学习</p>
+            </div>
+            <div class="hero-stats">
+              <div class="hero-stat-card">
+                <div class="stat-icon">📚</div>
+                <div class="stat-info">
+                  <div class="stat-number" id="kb-total-count">0</div>
+                  <div class="stat-label">总收藏</div>
+                </div>
+              </div>
+              <div class="hero-stat-card">
+                <div class="stat-icon">📖</div>
+                <div class="stat-info">
+                  <div class="stat-number" id="kb-unread-count">0</div>
+                  <div class="stat-label">未读</div>
+                </div>
+              </div>
+              <div class="hero-stat-card">
+                <div class="stat-icon">✅</div>
+                <div class="stat-info">
+                  <div class="stat-number" id="kb-read-count">0</div>
+                  <div class="stat-label">已读</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+        
+        <!-- 搜索和筛选区 -->
+        <div class="favorites-toolbar">
+          <div class="search-bar-modern">
+            <div class="search-icon">🔍</div>
+            <input type="text" id="kb-search-input" class="search-input-modern" placeholder="搜索标题、作者或内容..." />
+            <button id="kb-search-btn" class="btn-search-modern">搜索</button>
+          </div>
+          
+          <div class="filter-bar-modern">
+            <div class="filter-section">
+              <span class="filter-label">筛选：</span>
+              <select id="kb-filter-select" class="filter-select-modern">
+                <option value="all">全部文章</option>
+                <option value="unread">📖 未读</option>
+                <option value="read">✅ 已读</option>
+              </select>
+            </div>
+            
+            <div class="tag-section">
+              <span class="filter-label">标签：</span>
+              <div class="tag-filters-modern" id="kb-tag-filters">
+                <button class="tag-chip active" data-tag="">全部</button>
+                <button class="tag-chip" data-tag="技术">🔧 技术</button>
+                <button class="tag-chip" data-tag="AI">🤖 AI</button>
+                <button class="tag-chip" data-tag="产品">📦 产品</button>
+                <button class="tag-chip" data-tag="设计">🎨 设计</button>
+                <button class="tag-chip" data-tag="导入">📥 导入</button>
+          </div>
+            </div>
+          </div>
+        </div>
+        
+        <!-- 文章网格 -->
+        <div class="favorites-grid" id="kb-articles-list">
+          <!-- 空状态 -->
+          <div class="empty-state-modern">
+            <div class="empty-illustration">
+              <svg width="120" height="120" viewBox="0 0 120 120" fill="none">
+                <circle cx="60" cy="60" r="50" fill="#f0f0f0"/>
+                <text x="60" y="75" font-size="48" text-anchor="middle">📚</text>
+              </svg>
+          </div>
+            <h3 class="empty-title">还没有收藏</h3>
+            <p class="empty-desc">开始收藏你喜欢的文章吧</p>
+            <div class="empty-actions">
+              <button class="btn-primary" onclick="window.switchPage('accounts')">
+                去浏览文章
+              </button>
+              <button class="btn-secondary" onclick="document.getElementById('btn-import-article').click()">
+                导入文章
+              </button>
+          </div>
+          </div>
+        </div>
+      </div><!-- end page-knowledge -->
+      
+      <!-- 页面3: 设置 -->
+      <div class="page-container" id="page-settings" style="display: none;">
+        <div class="page-header">
+          <h1>⚙️ 设置</h1>
+          <p class="page-desc">数据管理和应用设置</p>
+        </div>
+        
+        <!-- 数据管理 -->
+        <div class="settings-section">
+          <h2 class="section-title">📊 数据管理</h2>
+          <div class="settings-cards">
+            <div class="setting-card">
+              <div class="setting-icon">💾</div>
+              <div class="setting-info">
+                <h3>导出数据</h3>
+                <p>导出所有数据到本地文件，可在其他浏览器导入</p>
+                <button class="btn-primary" onclick="DataSyncManager.exportAllData()">
+                  📤 导出数据
+                </button>
+              </div>
+            </div>
+            
+            <div class="setting-card">
+              <div class="setting-icon">📥</div>
+              <div class="setting-info">
+                <h3>导入数据</h3>
+                <p>从备份文件恢复数据（会覆盖当前数据）</p>
+                <button class="btn-primary" onclick="DataSyncManager.importData()">
+                  📥 导入数据
+                </button>
+              </div>
+            </div>
+            
+            <div class="setting-card">
+              <div class="setting-icon">📈</div>
+              <div class="setting-info">
+                <h3>数据统计</h3>
+                <p id="data-stats">加载中...</p>
+                <button class="btn-secondary" onclick="updateDataStats()">
+                  🔄 刷新统计
+                </button>
+              </div>
+            </div>
+            
+            <div class="setting-card warning">
+              <div class="setting-icon">🗑️</div>
+              <div class="setting-info">
+                <h3>清空数据</h3>
+                <p>删除所有本地数据（不可恢复，请先导出备份）</p>
+                <button class="btn-danger" onclick="DataSyncManager.clearAllData()">
+                  ⚠️ 清空所有数据
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+        
+        <!-- 快捷键说明 -->
+        <div class="settings-section">
+          <h2 class="section-title">⌨️ 快捷键</h2>
+          <div class="shortcuts-list">
+            <div class="shortcut-item">
+              <span class="shortcut-key">Cmd/Ctrl + E</span>
+              <span class="shortcut-desc">导出数据</span>
+            </div>
+            <div class="shortcut-item">
+              <span class="shortcut-key">Cmd/Ctrl + I</span>
+              <span class="shortcut-desc">导入数据</span>
+            </div>
+            <div class="shortcut-item">
+              <span class="shortcut-key">Cmd/Ctrl + K</span>
+              <span class="shortcut-desc">快速搜索</span>
+            </div>
+            <div class="shortcut-item">
+              <span class="shortcut-key">Cmd/Ctrl + D</span>
+              <span class="shortcut-desc">切换暗色模式</span>
+            </div>
+            <div class="shortcut-item">
+              <span class="shortcut-key">ESC</span>
+              <span class="shortcut-desc">关闭弹窗/退出沉浸模式</span>
+            </div>
+          </div>
+        </div>
+      </div>
+      
+      <script>
+        // 更新数据统计
+        function updateDataStats() {
+          const stats = DataSyncManager.getStats();
+          const statsEl = document.getElementById('data-stats');
+          if (statsEl) {
+            statsEl.innerHTML = `
+              📚 收藏文章: ${stats.favorites} 篇<br>
+              📡 订阅账号: ${stats.accounts} 个<br>
+              ✅ 已读文章: ${stats.readArticles} 篇
+            `;
+          }
+        }
+        
+        // 页面显示时更新统计
+        document.addEventListener('DOMContentLoaded', () => {
+          setTimeout(updateDataStats, 500);
+        });
+      </script>
+      
+      <!-- 页面4: 导入文章页面（已废弃，功能移至右上角按钮） -->
+      <div class="page-container" id="page-import" style="display: none;">
+        <div class="page-header">
+          <h1>📥 导入文章</h1>
+          <p class="page-desc">从外部URL或批量导入文章到知识库</p>
+        </div>
+        
+        <!-- 导入方式选择 -->
+        <div class="import-tabs">
+          <button class="tab-btn active" data-tab="url">单个URL</button>
+          <button class="tab-btn" data-tab="batch-url">批量URL</button>
+          <button class="tab-btn" data-tab="batch-accounts">批量公众号</button>
+        </div>
+        
+        <!-- Tab 1: 单个URL导入 -->
+        <div class="import-tab-content" id="tab-url" style="display: block;">
+          <div class="import-form">
+            <div class="form-group">
+              <label>文章URL <span class="required">*</span></label>
+              <input type="text" id="import-single-url" placeholder="https://mp.weixin.qq.com/s?..." />
+              <span class="help-text">粘贴微信公众号文章链接</span>
+            </div>
+            <div class="form-actions">
+              <button id="btn-import-single" class="btn-primary">📥 导入文章</button>
+              <button id="btn-clear-single" class="btn-secondary">清空</button>
+            </div>
+          </div>
+          
+          <div class="import-result" id="single-import-result" style="display: none;">
+            <h3>导入结果</h3>
+            <div id="single-result-content"></div>
+          </div>
+        </div>
+        
+        <!-- Tab 2: 批量URL导入 -->
+        <div class="import-tab-content" id="tab-batch-url" style="display: none;">
+          <div class="import-form">
+            <div class="form-group">
+              <label>批量URL（每行一个）<span class="required">*</span></label>
+              <textarea id="import-batch-urls" rows="10" placeholder="https://mp.weixin.qq.com/s?...&#10;https://mp.weixin.qq.com/s?...&#10;https://mp.weixin.qq.com/s?..."></textarea>
+              <span class="help-text">每行输入一个文章链接，最多50个</span>
+            </div>
+            <div class="form-actions">
+              <button id="btn-import-batch" class="btn-primary">📥 批量导入</button>
+              <button id="btn-clear-batch" class="btn-secondary">清空</button>
+            </div>
+          </div>
+          
+          <div class="import-progress" id="batch-import-progress" style="display: none;">
+            <h3>导入进度</h3>
+            <div class="progress-bar">
+              <div class="progress-fill" id="batch-progress-fill" style="width: 0%"></div>
+            </div>
+            <div class="progress-text">
+              <span id="batch-progress-text">0 / 0</span>
+              <span id="batch-progress-percent">0%</span>
+            </div>
+            <div class="progress-stats">
+              <span class="success-count">✅ 成功: <strong id="batch-success-count">0</strong></span>
+              <span class="error-count">❌ 失败: <strong id="batch-error-count">0</strong></span>
+            </div>
+          </div>
+        </div>
+        
+        <!-- Tab 3: 批量公众号导入 -->
+        <div class="import-tab-content" id="tab-batch-accounts" style="display: none;">
+          <div class="import-form">
+            <div class="form-group">
+              <label>公众号名称（每行一个）<span class="required">*</span></label>
+              <textarea id="import-batch-accounts-input" rows="10" placeholder="人民日报&#10;新华社&#10;央视新闻&#10;..."></textarea>
+              <span class="help-text">每行输入一个公众号名称，系统将自动搜索并添加</span>
+            </div>
+            <div class="form-actions">
+              <button id="btn-import-batch-accounts" class="btn-primary">📥 批量添加</button>
+              <button id="btn-clear-batch-accounts" class="btn-secondary">清空</button>
+            </div>
+          </div>
+          
+          <div class="import-progress" id="batch-accounts-progress" style="display: none;">
+            <h3>添加进度</h3>
+            <div class="progress-bar">
+              <div class="progress-fill" id="batch-accounts-progress-fill" style="width: 0%"></div>
+            </div>
+            <div class="progress-text">
+              <span id="batch-accounts-progress-text">0 / 0</span>
+              <span id="batch-accounts-progress-percent">0%</span>
+            </div>
+            <div class="progress-stats">
+              <span class="success-count">✅ 成功: <strong id="batch-accounts-success-count">0</strong></span>
+              <span class="error-count">❌ 失败: <strong id="batch-accounts-error-count">0</strong></span>
+            </div>
+            <div class="progress-details" id="batch-accounts-details"></div>
+          </div>
+        </div>
+        
+        <!-- 待开发功能提示 -->
+        <div class="dev-notice">
+          <h3>⏳ 开发中的功能</h3>
+          <ul>
+            <li>✅ 批量公众号添加UI - <strong>已实现</strong></li>
+            <li>✅ 进度显示 - <strong>已实现</strong></li>
+            <li>⏳ URL内容自动提取（需要cheerio）- 待开发</li>
+            <li>⏳ 反爬虫处理 - 待开发</li>
+            <li>⏳ 从文件导入（Excel/CSV）- 待开发</li>
+          </ul>
+        </div>
+      </div><!-- end page-import -->
+      
+    </main>
+  </div>
+  
+  <!-- 设置弹窗 -->
+  <div id="settings-modal" class="modal">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h3>应用设置</h3>
+        <button class="modal-close" id="close-settings">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div class="settings-status">
+          <div class="status-item">
+            <span>登录状态:</span>
+            <span id="settings-status-text" class="status-badge not-logged-in">未登录</span>
+          </div>
+          <div class="status-item" id="last-login-container" style="display:none;">
+            <span>上次更新:</span>
+            <span id="last-login-time">-</span>
+          </div>
+          <div class="status-item" id="expire-warning-container" style="display:none;">
+            <span>⚠️ 提醒:</span>
+            <span id="expire-warning-text" class="expire-warning">Cookie将在24小时后过期</span>
+          </div>
+        </div>
+        
+        <div class="quick-tip">
+          <p><strong>💡 避免频繁过期的小技巧：</strong></p>
+          <ul>
+            <li>建议每天早上更新一次Cookie和Token</li>
+            <li>使用工具时保持微信公众平台的登录状态</li>
+            <li>收藏微信公众平台链接，方便快速打开</li>
+          </ul>
+        </div>
+
+        <div class="cache-management">
+          <h4>🗄️ 缓存管理</h4>
+          <p class="cache-desc">系统会自动缓存文章内容，提升访问速度并减少请求频率</p>
+          <div class="cache-stats">
+            <span>文章列表缓存：<strong id="list-cache-count">-</strong></span>
+            <span>文章内容缓存：<strong id="content-cache-count">-</strong></span>
+          </div>
+          <div class="cache-actions">
+            <button id="btn-refresh-cache-stats" class="btn-secondary">刷新统计</button>
+            <button id="btn-clear-cache" class="btn-warning">清除全部缓存</button>
+          </div>
+          <p class="cache-note">💡 缓存说明：文章列表缓存30分钟，文章内容缓存24小时</p>
+        </div>
+
+        <div class="notice-box">
+          <p><strong>📌 使用说明：</strong></p>
+          <p>Web版需要您手动从微信公众平台获取登录参数（Cookie 和 Token），填写后保存即可使用。</p>
+          <p>详细步骤请查看下方的"如何获取配置参数"。</p>
+        </div>
+        
+        <div class="form-section">
+          <div class="form-group">
+            <label for="cookie-input">Cookie <span class="required">*</span></label>
+            <textarea id="cookie-input" rows="4" placeholder="从微信公众平台复制完整的Cookie字符串"></textarea>
+            <span class="help-text">在浏览器开发者工具的 Network 标签中，从任意请求的 Headers 中复制</span>
+          </div>
+          
+          <div class="form-group">
+            <label for="token-input">Token <span class="required">*</span></label>
+            <input type="text" id="token-input" placeholder="从微信公众平台的URL参数中获取Token" />
+            <span class="help-text">通常是一串数字，例如：712447071</span>
+          </div>
+          
+          <div class="form-group">
+            <label for="fingerprint-input">Fingerprint <span class="optional">可选</span></label>
+            <input type="text" id="fingerprint-input" placeholder="浏览器指纹参数（可选）" />
+            <span class="help-text">非必填，留空也可以正常使用</span>
+          </div>
+        </div>
+        
+        <div class="help-section">
+          <details open>
+            <summary>📖 如何获取配置参数？（点击展开/收起）</summary>
+            <div class="help-steps">
+              <div class="step">
+                <span class="step-number">1</span>
+                <div class="step-content">
+                  <strong>登录微信公众平台</strong>
+                  <p>访问 <a href="https://mp.weixin.qq.com/" target="_blank">mp.weixin.qq.com</a> 并登录您的账号</p>
+                </div>
+              </div>
+              <div class="step">
+                <span class="step-number">2</span>
+                <div class="step-content">
+                  <strong>打开开发者工具（先做这步）</strong>
+                  <p>按键盘 <kbd>F12</kbd> 或右键选择"检查"打开开发者工具</p>
+                  <p>⚠️ <strong>重要：必须先打开开发者工具，再进行下一步操作</strong></p>
+                </div>
+              </div>
+              <div class="step">
+                <span class="step-number">3</span>
+                <div class="step-content">
+                  <strong>切换到 Network 标签</strong>
+                  <p>在开发者工具中点击 "Network"（网络）标签</p>
+                </div>
+              </div>
+              <div class="step">
+                <span class="step-number">4</span>
+                <div class="step-content">
+                  <strong>选择任一功能入口（以下任选一个）</strong>
+                  <p>✅ <strong>方式1：</strong>左侧菜单点击 "内容管理" 或 "图文消息"</p>
+                  <p>✅ <strong>方式2：</strong>左侧菜单点击 "群发功能" → "新建群发"</p>
+                  <p>✅ <strong>方式3：</strong>左侧菜单点击 "统计" 或 "图文分析"</p>
+                  <p>✅ <strong>方式4：</strong>点击任何左侧菜单项都可以</p>
+                  <p>💡 不用担心找不到，<strong>只要点击任何菜单</strong>都会触发网络请求</p>
+                </div>
+              </div>
+              <div class="step">
+                <span class="step-number">5</span>
+                <div class="step-content">
+                  <strong>在 Network 中查看请求</strong>
+                  <p>点击菜单后，Network 标签中会出现很多请求</p>
+                  <p>点击任意一个请求（名称不重要）</p>
+                </div>
+              </div>
+              <div class="step">
+                <span class="step-number">6</span>
+                <div class="step-content">
+                  <strong>复制 Cookie 和 Token</strong>
+                  <p><strong>获取 Cookie：</strong></p>
+                  <p>• 在右侧面板找到 "Headers"（请求头）</p>
+                  <p>• 向下滚动找到 <code>Cookie:</code>（通常很长）</p>
+                  <p>• 复制 Cookie 后面的<strong>完整内容</strong></p>
+                  <br/>
+                  <p><strong>获取 Token：</strong></p>
+                  <p>• 看页面顶部的网址栏（浏览器地址栏）</p>
+                  <p>• 找到类似 <code>token=1234567890</code> 的部分</p>
+                  <p>• 只复制数字部分（例如：1234567890）</p>
+                </div>
+              </div>
+              <div class="step">
+                <span class="step-number">7</span>
+                <div class="step-content">
+                  <strong>填写并保存</strong>
+                  <p>将复制的 Cookie 和 Token 粘贴到上方输入框，点击"保存设置"</p>
+                  <p>✅ 保存成功后即可使用工具</p>
+                </div>
+              </div>
+            </div>
+            <div class="help-tips">
+              <p><strong>💡 提示：</strong></p>
+              <ul>
+                <li>Cookie 通常很长，确保复制完整</li>
+                <li>Token 是一串纯数字</li>
+                <li>参数有效期约24小时，过期后需要重新获取</li>
+              </ul>
+            </div>
+          </details>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button id="btn-save-settings" class="btn-primary">保存设置</button>
+      </div>
+    </div>
+  </div>
+  
+  <!-- 加载提示 -->
+  <div id="loading-overlay" class="loading-overlay" style="display: none;">
+    <div class="loading-spinner"></div>
+    <p id="loading-text">加载中...</p>
+  </div>
+  
+  <!-- Toast 提示 -->
+  <div id="toast" class="toast"></div>
+
+  <!-- 夜间模式切换 -->
+  <button id="theme-toggle" class="theme-toggle" title="切换夜间模式">
+    🌙
+  </button>
+
+  <!-- 导入文章模态框 -->
+  <div id="import-article-modal" class="modal">
+    <div class="modal-content modal-md">
+      <div class="modal-header">
+        <h2>📥 导入文章</h2>
+        <button class="modal-close" onclick="document.getElementById('import-article-modal').style.display='none'">✕</button>
+      </div>
+      <div class="modal-body">
+        <!-- 导入方式选择 -->
+        <div class="import-tabs" style="border-bottom: 2px solid #e8e8e8; margin-bottom: 20px;">
+          <button class="tab-btn active" data-import-tab="url">单个URL</button>
+          <button class="tab-btn" data-import-tab="batch-url">批量URL</button>
+          <button class="tab-btn" data-import-tab="batch-accounts">批量公众号</button>
+        </div>
+        
+        <!-- 单个URL -->
+        <div class="import-tab-content" id="import-tab-url" style="display: block;">
+          <div class="form-group">
+            <label>文章URL <span class="required">*</span></label>
+            <input type="text" id="import-single-url-input" placeholder="https://mp.weixin.qq.com/s?..." />
+            <span class="help-text">粘贴微信公众号文章链接</span>
+          </div>
+          <div class="dev-notice" style="margin: 15px 0; padding: 15px; background: #fff3cd; border-radius: 8px; border: 1px solid #ffc107;">
+            <p style="margin: 0; color: #856404;"><strong>⏳ 功能待开发</strong></p>
+            <p style="margin: 5px 0 0; font-size: 13px; color: #856404;">URL内容自动提取需要后端支持（cheerio库）</p>
+          </div>
+        </div>
+        
+        <!-- 批量URL -->
+        <div class="import-tab-content" id="import-tab-batch-url" style="display: none;">
+          <div class="form-group">
+            <label>批量URL（每行一个）<span class="required">*</span></label>
+            <textarea id="import-batch-urls-input" rows="10" placeholder="https://mp.weixin.qq.com/s?...&#10;https://mp.weixin.qq.com/s?..."></textarea>
+            <span class="help-text">每行输入一个文章链接，最多50个</span>
+          </div>
+          <div class="dev-notice" style="margin: 15px 0; padding: 15px; background: #fff3cd; border-radius: 8px; border: 1px solid #ffc107;">
+            <p style="margin: 0; color: #856404;"><strong>⏳ 功能待开发</strong></p>
+            <p style="margin: 5px 0 0; font-size: 13px; color: #856404;">批量URL导入需要后端支持</p>
+          </div>
+        </div>
+        
+        <!-- 批量公众号 -->
+        <div class="import-tab-content" id="import-tab-batch-accounts" style="display: none;">
+          <div class="form-group">
+            <label>公众号名称（每行一个）<span class="required">*</span></label>
+            <textarea id="import-batch-accounts-input" rows="10" placeholder="人民日报&#10;新华社&#10;央视新闻&#10;..."></textarea>
+            <span class="help-text">每行输入一个公众号名称，最多50个</span>
+          </div>
+          <button id="btn-import-batch-accounts-modal" class="btn-primary" style="width: 100%;">开始导入</button>
+          
+          <!-- 进度显示 -->
+          <div id="import-progress-modal" style="display: none; margin-top: 20px;">
+            <div class="progress-bar">
+              <div class="progress-fill" id="import-progress-fill" style="width: 0%"></div>
+            </div>
+            <div class="progress-text">
+              <span id="import-progress-text">0 / 0</span>
+              <span id="import-progress-percent">0%</span>
+            </div>
+            <div class="progress-stats">
+              <span class="success-count">✅ 成功: <strong id="import-success-count">0</strong></span>
+              <span class="error-count">❌ 失败: <strong id="import-error-count">0</strong></span>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn-secondary" onclick="document.getElementById('import-article-modal').style.display='none'">关闭</button>
+      </div>
+    </div>
+  </div>
+  
+  <!-- 批量导入公众号模态框（保留兼容） -->
+  <div id="batch-import-modal" class="modal">
+    <div class="modal-content modal-md">
+      <div class="modal-header">
+        <h2>📥 批量导入公众号</h2>
+        <button class="modal-close" onclick="document.getElementById('batch-import-modal').style.display='none'">✕</button>
+      </div>
+      <div class="modal-body">
+        <div class="form-group">
+          <label>公众号名称（每行一个）<span class="required">*</span></label>
+          <textarea id="batch-import-textarea" rows="10" placeholder="人民日报&#10;新华社&#10;央视新闻&#10;..."></textarea>
+          <span class="help-text">每行输入一个公众号名称，最多50个</span>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button id="btn-start-batch-import" class="btn-primary">开始导入</button>
+        <button class="btn-secondary" onclick="document.getElementById('batch-import-modal').style.display='none'">取消</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 订阅设置模态框 -->
+  <div id="subscribe-modal" class="modal">
+    <div class="modal-content modal-md">
+      <div class="modal-header">
+        <h2>⚙️ 订阅设置</h2>
+        <button class="modal-close" onclick="document.getElementById('subscribe-modal').style.display='none'">✕</button>
+      </div>
+      <div class="modal-body">
+        <div class="subscribe-accounts" id="subscribe-accounts-list">
+          <!-- 动态填充 -->
+        </div>
+        <div class="form-group">
+          <label>刷新间隔</label>
+          <select id="refresh-interval">
+            <option value="daily">每天</option>
+            <option value="weekly">每周</option>
+            <option value="monthly">每月</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>刷新时间</label>
+          <input type="time" id="refresh-time" value="08:00" />
+        </div>
+        <div class="dev-notice" style="margin-top: 15px;">
+          <p><strong>⏳ 功能待开发</strong></p>
+          <p>定时任务功能需要后端支持（node-cron），当前仅为UI展示</p>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button id="btn-save-subscribe" class="btn-primary" disabled>保存设置</button>
+        <button class="btn-secondary" onclick="document.getElementById('subscribe-modal').style.display='none'">取消</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Toast 通知 -->
+  <div id="toast-container" class="toast-container"></div>
+
+  <script src="/js/data-sync.js?v=2.9.0"></script>
+  <script src="/js/favorites-manager.js?v=2.9.0"></script>
+  <script src="/js/article-import.js?v=2.9.0"></script>
+  <script src="/js/favorites-ui.js?v=2.9.0"></script>
+  <script src="/js/app.js?v=2.9.0"></script>
+  <script src="/js/ui-manager.js?v=2.9.0"></script>
+</body>
+</html>

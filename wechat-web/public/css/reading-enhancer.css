@@ -1,0 +1,71 @@
+/* ==================== 简洁阅读增强样式 ==================== */
+
+/* Toast 通知 */
+.toast-container {
+  position: fixed;
+  top: 80px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 9999;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+  pointer-events: none;
+}
+
+.toast {
+  background: rgba(0, 0, 0, 0.85);
+  color: white;
+  padding: var(--space-md) var(--space-xl);
+  border-radius: var(--radius-full);
+  font-size: var(--font-size-md);
+  font-weight: 500;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+  animation: toastIn 0.3s ease-out;
+  pointer-events: auto;
+  max-width: 300px;
+  text-align: center;
+  white-space: nowrap;
+}
+
+.toast.success {
+  background: linear-gradient(135deg, #07c160 0%, #06ad56 100%);
+}
+
+.toast.error {
+  background: linear-gradient(135deg, #ff3b30 0%, #e31c0d 100%);
+}
+
+.toast.warning {
+  background: linear-gradient(135deg, #ff9500 0%, #e88700 100%);
+}
+
+.toast.info {
+  background: linear-gradient(135deg, #007aff 0%, #0062cc 100%);
+}
+
+.toast.hiding {
+  animation: toastOut 0.3s ease-out forwards;
+}
+
+@keyframes toastIn {
+  from {
+    opacity: 0;
+    transform: translateY(-20px) scale(0.9);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes toastOut {
+  from {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+  to {
+    opacity: 0;
+    transform: translateY(-20px) scale(0.9);
+  }
+}
