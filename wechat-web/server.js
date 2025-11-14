@@ -161,9 +161,10 @@ function toAbsoluteUrl(originalUrl, src) {
   }
 }
 
-function rewriteToProxy(u) {
+function rewriteToProxy(u, pageUrl) {
   const enc = encodeURIComponent(u);
-  return `/api/proxy?url=${enc}`;
+  const page = pageUrl ? `&page=${encodeURIComponent(pageUrl)}` : '';
+  return `/api/proxy?url=${enc}${page}`;
 }
 
 function processArticleHtml(html, originalUrl) {
@@ -177,7 +178,7 @@ function processArticleHtml(html, originalUrl) {
     const src = $el.attr('src');
     const finalSrc = toAbsoluteUrl(originalUrl, ds || src);
     if (finalSrc) {
-      const proxied = rewriteToProxy(finalSrc);
+      const proxied = rewriteToProxy(finalSrc, originalUrl);
       $el.attr('src', proxied);
       $el.removeAttr('data-src');
       $el.removeAttr('crossorigin');
@@ -195,7 +196,7 @@ function processArticleHtml(html, originalUrl) {
       const parts = raw.split(',').map(s => s.trim()).filter(Boolean).map(part => {
         const [url, size] = part.split(' ').filter(Boolean);
         const abs = toAbsoluteUrl(originalUrl, url);
-        const prox = rewriteToProxy(abs);
+        const prox = rewriteToProxy(abs, originalUrl);
         return size ? `${prox} ${size}` : prox;
       });
       $el.attr('srcset', parts.join(', '));
@@ -590,6 +591,7 @@ app.post('/api/article-content', async (req, res) => {
 app.get('/api/proxy', async (req, res) => {
   try {
     const target = req.query.url;
+    const page = req.query.page;
     const settings = getSettings(req);
     if (!target || !isAllowedUrl(target)) {
       return res.status(400).send('Invalid target');
@@ -599,7 +601,9 @@ app.get('/api/proxy', async (req, res) => {
       headers: {
         'Cookie': settings.cookie || '',
         'User-Agent': getUserAgent(),
-        'Referer': 'https://mp.weixin.qq.com/'
+        'Referer': page || 'https://mp.weixin.qq.com/',
+        'Origin': 'https://mp.weixin.qq.com',
+        'Accept': 'image/avif,image/webp,image/apng,image/*,*/*;q=0.8'
       },
       timeout: 15000
     });
