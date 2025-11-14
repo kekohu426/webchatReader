@@ -615,17 +615,20 @@ app.use((err, req, res, next) => {
   });
 });
 
-// 启动服务器
-app.listen(PORT, () => {
-  console.log('='.repeat(50));
-  console.log('🚀 微信公众号文章抓取工具 - Web版');
-  console.log('='.repeat(50));
-  console.log(`📱 服务器运行在: http://localhost:${PORT}`);
-  console.log(`📱 移动端访问: http://[你的IP]:${PORT}`);
-  console.log('='.repeat(50));
-  console.log('💡 提示：');
-  console.log('  - 请先在设置中配置 Cookie 和 Token');
-  console.log('  - 支持桌面端和移动端访问');
-  console.log('  - 按 Ctrl+C 停止服务器');
-  console.log('='.repeat(50));
-});
+if (process.env.VERCEL) {
+  module.exports = app;
+} else {
+  app.listen(PORT, () => {
+    console.log('='.repeat(50));
+    console.log('🚀 微信公众号文章抓取工具 - Web版');
+    console.log('='.repeat(50));
+    console.log(`📱 服务器运行在: http://localhost:${PORT}`);
+    console.log(`📱 移动端访问: http://[你的IP]:${PORT}`);
+    console.log('='.repeat(50));
+    console.log('💡 提示：');
+    console.log('  - 请先在设置中配置 Cookie 和 Token');
+    console.log('  - 支持桌面端和移动端访问');
+    console.log('  - 按 Ctrl+C 停止服务器');
+    console.log('='.repeat(50));
+  });
+}

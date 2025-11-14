@@ -1133,12 +1133,10 @@ body {
 /* 文章内容容器 */
 .detail-content {
   flex: 1;
-  overflow-y: auto;
+  overflow: visible;
   padding: var(--space-3xl) var(--space-3xl);
   scroll-behavior: smooth;
   background: #f5f7fa;
-  -ms-overflow-style: none;  /* IE and Edge */
-  scrollbar-width: none;  /* Firefox */
 }
 
 /* 文章容器 - 支持宽度调节 */

@@ -627,69 +627,44 @@ async function showArticleDetail(article) {
       elements.detailIframe.onload = () => {
         clearTimeout(iframeTimeout);
         hideLoading();
-        
-        // 注入样式来控制 iframe 内的字体大小
         try {
           const iframeDoc = elements.detailIframe.contentDocument || elements.detailIframe.contentWindow.document;
           if (iframeDoc) {
             const style = iframeDoc.createElement('style');
             style.textContent = `
-              /* 控制整体字体大小 */
               body {
                 font-size: 15px !important;
                 line-height: 1.8 !important;
                 -webkit-font-smoothing: antialiased !important;
+                overflow: hidden !important;
               }
-              
-              /* 控制标题字体 */
-              h1, h2, h3, h4, h5, h6 {
-                font-size: inherit !important;
-                line-height: 1.6 !important;
-              }
-              
+              h1, h2, h3, h4, h5, h6 { line-height: 1.6 !important; }
               h1 { font-size: 1.5em !important; }
               h2 { font-size: 1.3em !important; }
               h3 { font-size: 1.1em !important; }
-              
-              /* 控制段落字体 */
-              p, div, span {
-                font-size: inherit !important;
-                line-height: inherit !important;
-              }
-              
-              /* 控制列表字体 */
-              ul, ol, li {
-                font-size: inherit !important;
-              }
-              
-              /* 控制引用字体 */
-              blockquote {
-                font-size: inherit !important;
-              }
-              
-              /* 控制代码字体 */
-              code, pre {
-                font-size: 0.9em !important;
-              }
-              
-              /* 隐藏滚动条 */
-              body::-webkit-scrollbar {
-                width: 0;
-                display: none;
-              }
-              
-              body {
-                -ms-overflow-style: none;
-                scrollbar-width: none;
-                overflow-y: auto;
-              }
+              p, div, span, ul, ol, li, blockquote { font-size: inherit !important; }
+              code, pre { font-size: 0.9em !important; }
             `;
             iframeDoc.head.appendChild(style);
+
+            const resizeIframe = () => {
+              const height = Math.max(
+                iframeDoc.documentElement.scrollHeight,
+                iframeDoc.body ? iframeDoc.body.scrollHeight : 0
+              );
+              if (height && height > 0) {
+                elements.detailIframe.style.height = height + 'px';
+              }
+            };
+
+            resizeIframe();
+            setTimeout(resizeIframe, 100);
+            setTimeout(resizeIframe, 500);
           }
         } catch (e) {
-          console.log('无法注入样式到iframe:', e);
+          console.log('无法处理iframe内容:', e);
         }
-        
+
         const totalTime = Date.now() - loadingStartTime;
         const cacheHit = response.headers.get('X-Cache-Hit') === 'true';
         console.log(`📖 文章加载完成，耗时: ${totalTime}ms, 缓存命中: ${cacheHit}`);

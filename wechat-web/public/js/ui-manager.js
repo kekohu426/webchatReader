@@ -708,38 +708,36 @@ const ReadingEnhancer = {
   
   // 滚动进度
   initScrollProgress() {
-    const contentWrapper = document.getElementById('detail-content-wrapper');
     const progressFill = document.getElementById('reading-progress-fill');
-    
-    if (contentWrapper && progressFill) {
-      contentWrapper.addEventListener('scroll', () => {
-        const scrollTop = contentWrapper.scrollTop;
-        const scrollHeight = contentWrapper.scrollHeight - contentWrapper.clientHeight;
-        const progress = scrollHeight > 0 ? (scrollTop / scrollHeight) * 100 : 0;
-        progressFill.style.width = `${progress}%`;
-      });
-    }
+    if (!progressFill) return;
+    const updateProgress = () => {
+      const doc = document.documentElement;
+      const scrollTop = window.pageYOffset || doc.scrollTop || 0;
+      const scrollHeight = (doc.scrollHeight || 0) - (window.innerHeight || 0);
+      const progress = scrollHeight > 0 ? (scrollTop / scrollHeight) * 100 : 0;
+      progressFill.style.width = `${progress}%`;
+    };
+    window.addEventListener('scroll', updateProgress, { passive: true });
+    updateProgress();
   },
   
   // 返回顶部
   initBackToTop() {
-    const contentWrapper = document.getElementById('detail-content-wrapper');
     const backToTopBtn = document.getElementById('btn-back-to-top');
     
-    if (contentWrapper && backToTopBtn) {
-      contentWrapper.addEventListener('scroll', () => {
-        if (contentWrapper.scrollTop > 300) {
+    if (backToTopBtn) {
+      const toggleBtn = () => {
+        if ((window.pageYOffset || document.documentElement.scrollTop || 0) > 300) {
           backToTopBtn.classList.add('show');
         } else {
           backToTopBtn.classList.remove('show');
         }
-      });
-      
+      };
+      window.addEventListener('scroll', toggleBtn, { passive: true });
+      toggleBtn();
+
       backToTopBtn.addEventListener('click', () => {
-        contentWrapper.scrollTo({
-          top: 0,
-          behavior: 'smooth'
-        });
+        window.scrollTo({ top: 0, behavior: 'smooth' });
       });
     }
   },
