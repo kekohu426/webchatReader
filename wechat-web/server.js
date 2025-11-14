@@ -240,7 +240,11 @@ app.post('/api/settings', (req, res) => {
       lastUpdated: new Date().toISOString()
     };
     
-    // 也保存到内存
+    // 同步到客户端（Base64 编码，避免特殊字符破坏）：便于无状态环境在资源代理时携带
+    try {
+      const b64 = Buffer.from(cookie || '', 'utf8').toString('base64');
+      res.cookie('WX_AUTH', b64, { httpOnly: true, sameSite: 'lax', maxAge: 24 * 60 * 60 * 1000 });
+    } catch {}
     
     
     res.json({ 
