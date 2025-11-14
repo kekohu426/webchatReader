@@ -70,6 +70,52 @@ const elements = {
 
 // ==================== 工具函数 ====================
 
+// 处理微信文章HTML为可直接显示的内容
+function processArticleHtml(html, baseUrl) {
+  try {
+    let content = '';
+    const contentMatch = html.match(/<div class="rich_media_content[^"]*">([\s\S]*?)<\/div>/i);
+    if (contentMatch && contentMatch[1]) {
+      content = contentMatch[1].trim();
+    } else {
+      const bodyMatch = html.match(/<body[^>]*>([\s\S]*?)<\/body>/i);
+      content = bodyMatch && bodyMatch[1] ? bodyMatch[1].trim() : html;
+    }
+
+    const resolveUrl = (src) => {
+      if (src && !/^https?:\/\//i.test(src) && baseUrl) {
+        try {
+          const u = new URL(baseUrl);
+          if (src.startsWith('/')) {
+            return `${u.protocol}//${u.host}${src}`;
+          }
+          const basePath = baseUrl.substring(0, baseUrl.lastIndexOf('/') + 1);
+          return `${basePath}${src}`;
+        } catch (_) {
+          return src;
+        }
+      }
+      return src;
+    };
+
+    content = content.replace(/data-src=("|')([^"']+)(\1)/g, (_m, q, src) => `src=${q}${resolveUrl(src)}${q}`);
+    content = content.replace(/data-original=("|')([^"']+)(\1)/g, (_m, q, src) => `src=${q}${resolveUrl(src)}${q}`);
+
+    content = content.replace(/src=("|')data:image[^"']+(\1)/g, '');
+
+    content = content.replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '');
+
+    content = content.replace(/class="wx_/g, 'class="wx-');
+
+    content = content.replace(/<img/gi, '<img style="max-width:100%;height:auto;display:block;margin:10px auto;"');
+
+    const doc = `<!DOCTYPE html><html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="referrer" content="no-referrer"><style>body{font-size:15px;line-height:1.8;-webkit-font-smoothing:antialiased;overflow:hidden;padding:0 12px;}h1,h2,h3,h4,h5,h6{line-height:1.6}h1{font-size:1.5em}h2{font-size:1.3em}h3{font-size:1.1em}p,div,span,ul,ol,li,blockquote{font-size:inherit}code,pre{font-size:.9em}</style></head><body>${content}</body></html>`;
+    return doc;
+  } catch (e) {
+    return html;
+  }
+}
+
 // 显示提示
 function showToast(message, type = 'info') {
   elements.toast.textContent = message;
@@ -103,10 +149,15 @@ function formatDate(timestamp) {
 // API 请求封装
 async function apiRequest(url, options = {}) {
   try {
+    // 附带认证头（适配无状态部署）
+    const settings = state.settings || {};
     const response = await fetch(url, {
       credentials: 'include', // 重要：包含 session cookie
       headers: {
         'Content-Type': 'application/json',
+        'X-Auth-Token': settings.token || '',
+        'X-Auth-Cookie': settings.cookie || '',
+        'X-Auth-Fingerprint': settings.fingerprint || '',
         ...options.headers
       },
       ...options
@@ -214,6 +265,7 @@ async function saveSettings() {
     
     if (result.success) {
       state.settings = { cookie, token, fingerprint };
+      localStorage.setItem('wechat_settings', JSON.stringify(state.settings));
       showToast('设置保存成功！', 'success');
       updateLoginStatus(result.data);
       closeSettingsModal();
@@ -598,25 +650,11 @@ async function showArticleDetail(article) {
       const html = await response.text();
       const loadTime = Date.now() - loadingStartTime;
       
-      // 创建一个 blob URL 来加载 HTML
-      const blob = new Blob([html], { type: 'text/html' });
-      const blobUrl = URL.createObjectURL(blob);
-      
-      // 显示渲染提示
       if (loadTime > 2000) {
         showLoading('正在渲染文章...');
       }
       
-      elements.detailIframe.src = blobUrl;
-      
-      // 清理旧的 blob URL
-      elements.detailIframe.onload = () => {
-        hideLoading();
-        // 5秒后释放 blob URL
-        setTimeout(() => {
-          if (blobUrl) URL.revokeObjectURL(blobUrl);
-        }, 5000);
-      };
+      elements.detailIframe.srcdoc = html;
       
       // iframe 加载超时处理
       const iframeTimeout = setTimeout(() => {
@@ -926,6 +964,7 @@ async function clearCache() {
 async function init() {
   console.log('应用初始化...');
   loadAccountsFromStorage();
+  loadSettingsFromStorage();
   await loadSettings();
   await loadCacheStats();
   
@@ -1025,3 +1064,13 @@ function toggleArticleStar(articleId, buttonElement) {
 window.deleteAccount = deleteAccount;
 window.toggleArticleStar = toggleArticleStar;
 window.isArticleStarred = isArticleStarred;
+function loadSettingsFromStorage() {
+  const saved = localStorage.getItem('wechat_settings');
+  if (saved) {
+    try {
+      const s = JSON.parse(saved);
+      state.settings = s;
+      updateLoginStatus({ hasToken: !!s.token, hasCookie: !!s.cookie, hasFingerprint: !!s.fingerprint, lastUpdated: null });
+    } catch {}
+  }
+}

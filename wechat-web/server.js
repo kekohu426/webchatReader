@@ -7,6 +7,7 @@ const cors = require('cors');
 const cookieParser = require('cookie-parser');
 const compression = require('compression');
 const ExcelJS = require('exceljs');
+const cheerio = require('cheerio');
 require('dotenv').config();
 
 const app = express();
@@ -114,6 +115,100 @@ function sleep(ms) {
   return new Promise(resolve => setTimeout(resolve, ms));
 }
 
+// 从 session / 头部 / 请求体提取设置（适配无状态环境）
+function getSettings(req) {
+  const sessionSettings = (req.session && req.session.settings) || {};
+  const headerToken = req.headers['x-auth-token'];
+  const headerCookie = req.headers['x-auth-cookie'];
+  const headerFingerprint = req.headers['x-auth-fingerprint'];
+  const body = req.body || {};
+  return {
+    token: sessionSettings.token || headerToken || body.token || '',
+    cookie: sessionSettings.cookie || headerCookie || body.cookie || '',
+    fingerprint: sessionSettings.fingerprint || headerFingerprint || body.fingerprint || ''
+  };
+}
+
+// 允许通过代理的域名
+const ALLOWED_PROXY_HOSTS = new Set([
+  'mp.weixin.qq.com',
+  'mmbiz.qpic.cn',
+  'res.wx.qq.com',
+  'wx.qlogo.cn'
+]);
+
+function isAllowedUrl(u) {
+  try {
+    const parsed = new URL(u);
+    return ALLOWED_PROXY_HOSTS.has(parsed.hostname);
+  } catch {
+    return false;
+  }
+}
+
+function toAbsoluteUrl(originalUrl, src) {
+  try {
+    const base = new URL(originalUrl);
+    if (!src) return '';
+    // handle protocol-relative
+    if (src.startsWith('//')) return `${base.protocol}${src}`;
+    // handle absolute
+    if (/^https?:\/\//i.test(src)) return src;
+    // handle relative
+    return new URL(src, base).toString();
+  } catch {
+    return src || '';
+  }
+}
+
+function rewriteToProxy(u) {
+  const enc = encodeURIComponent(u);
+  return `/api/proxy?url=${enc}`;
+}
+
+function processArticleHtml(html, originalUrl) {
+  const $ = cheerio.load(html, { decodeEntities: false });
+  // Remove heavy scripts to avoid delays
+  $('script').remove();
+  // Normalize images
+  $('img').each((_, el) => {
+    const $el = $(el);
+    const ds = $el.attr('data-src');
+    const src = $el.attr('src');
+    const finalSrc = toAbsoluteUrl(originalUrl, ds || src);
+    if (finalSrc) {
+      const proxied = rewriteToProxy(finalSrc);
+      $el.attr('src', proxied);
+      $el.removeAttr('data-src');
+      $el.removeAttr('crossorigin');
+      $el.removeAttr('referrerpolicy');
+      $el.removeAttr('nonce');
+    }
+  });
+  // Normalize source tags inside picture
+  $('source').each((_, el) => {
+    const $el = $(el);
+    const ds = $el.attr('data-srcset');
+    const ss = $el.attr('srcset');
+    const raw = ds || ss || '';
+    if (raw) {
+      const parts = raw.split(',').map(s => s.trim()).filter(Boolean).map(part => {
+        const [url, size] = part.split(' ').filter(Boolean);
+        const abs = toAbsoluteUrl(originalUrl, url);
+        const prox = rewriteToProxy(abs);
+        return size ? `${prox} ${size}` : prox;
+      });
+      $el.attr('srcset', parts.join(', '));
+      $el.removeAttr('data-srcset');
+    }
+  });
+  // Add base for relative links (if any)
+  $('head').prepend(`<base href="${originalUrl}">`);
+  // Ensure body hidden overflow to avoid inner scrollbars
+  $('head').append('<style>body{overflow:hidden!important}</style>');
+  return $.html();
+}
+
 // ================== API 路由 ==================
 
 // 健康检查
@@ -174,7 +269,7 @@ app.post('/api/search-account', async (req, res) => {
   try {
     const { accountName, query } = req.body;
     const accountQuery = (accountName || query || '').trim();
-    const settings = req.session.settings || {};
+    const settings = getSettings(req);
     
     if (!accountQuery) {
       return res.status(400).json({ success: false, message: '缺少账号名称' });
@@ -282,7 +377,7 @@ app.post('/api/search-account', async (req, res) => {
 app.post('/api/articles', async (req, res) => {
   try {
     const { fakeid, page = 1, count = 10, forceRefresh = false } = req.body;
-    const settings = req.session.settings || {};
+    const settings = getSettings(req);
     
     if (!settings.cookie || !settings.token) {
       return res.status(401).json({ 
@@ -292,7 +387,7 @@ app.post('/api/articles', async (req, res) => {
     }
     
     // 检查缓存
-    const sessionId = req.sessionID || (req.session && req.session.id) || 'anon';
+    const sessionId = req.sessionID || (req.session && req.session.id) || req.headers['x-session-id'] || 'anon';
     const cacheKey = `${sessionId}:${fakeid}_${page}`;
     const cached = storage.articles[cacheKey];
     
@@ -398,7 +493,7 @@ app.post('/api/articles', async (req, res) => {
 app.post('/api/article-content', async (req, res) => {
   try {
     const { url, forceRefresh = false } = req.body;
-    const settings = req.session.settings || {};
+    const settings = getSettings(req);
     
     if (!url) {
       return res.status(400).json({
@@ -408,7 +503,7 @@ app.post('/api/article-content', async (req, res) => {
     }
     
     // 检查缓存
-    const sessionId = req.sessionID || (req.session && req.session.id) || 'anon';
+    const sessionId = req.sessionID || (req.session && req.session.id) || req.headers['x-session-id'] || 'anon';
     const contentKey = `${sessionId}:${url}`;
     const cached = storage.articleContent[contentKey];
     if (!forceRefresh && cached && isCacheValid(cached.lastUpdate, CACHE_CONFIG.ARTICLE_CONTENT_TTL)) {
@@ -430,10 +525,10 @@ app.post('/api/article-content', async (req, res) => {
       maxContentLength: 50 * 1024 * 1024, // 最大50MB
       maxBodyLength: 50 * 1024 * 1024
     });
-    
+    const processed = processArticleHtml(response.data, url);
     // 保存到缓存
     storage.articleContent[contentKey] = {
-      html: response.data,
+      html: processed,
       lastUpdate: Date.now()
     };
     
@@ -441,8 +536,8 @@ app.post('/api/article-content', async (req, res) => {
     
     // 返回HTML内容
     res.setHeader('X-Cache-Hit', 'false');
-    res.send(response.data);
-    
+    res.send(processed);
+  
   } catch (error) {
     console.error('❌ 获取文章内容失败:', error.message);
     res.status(500).send(`
@@ -488,6 +583,33 @@ app.post('/api/article-content', async (req, res) => {
         </body>
       </html>
     `);
+  }
+});
+
+// 资源代理（图片/CSS）
+app.get('/api/proxy', async (req, res) => {
+  try {
+    const target = req.query.url;
+    const settings = getSettings(req);
+    if (!target || !isAllowedUrl(target)) {
+      return res.status(400).send('Invalid target');
+    }
+    const response = await axios.get(target, {
+      responseType: 'arraybuffer',
+      headers: {
+        'Cookie': settings.cookie || '',
+        'User-Agent': getUserAgent(),
+        'Referer': 'https://mp.weixin.qq.com/'
+      },
+      timeout: 15000
+    });
+    const ct = response.headers['content-type'] || 'application/octet-stream';
+    res.setHeader('Content-Type', ct);
+    res.setHeader('Cache-Control', 'public, max-age=86400');
+    res.send(Buffer.from(response.data));
+  } catch (err) {
+    console.error('资源代理失败:', err.message);
+    res.status(500).send('Proxy error');
   }
 });
 
