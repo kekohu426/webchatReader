@@ -122,9 +122,14 @@ function getSettings(req) {
   const headerCookie = req.headers['x-auth-cookie'];
   const headerFingerprint = req.headers['x-auth-fingerprint'];
   const body = req.body || {};
+  let cookieFromClient = null;
+  try {
+    const raw = req.cookies && (req.cookies.WX_AUTH || req.cookies['wx_auth']);
+    if (raw) cookieFromClient = Buffer.from(raw, 'base64').toString('utf8');
+  } catch {}
   return {
     token: sessionSettings.token || headerToken || body.token || '',
-    cookie: sessionSettings.cookie || headerCookie || body.cookie || '',
+    cookie: sessionSettings.cookie || cookieFromClient || headerCookie || body.cookie || '',
     fingerprint: sessionSettings.fingerprint || headerFingerprint || body.fingerprint || ''
   };
 }
@@ -174,13 +179,16 @@ function processArticleHtml(html, originalUrl) {
   // Normalize images
   $('img').each((_, el) => {
     const $el = $(el);
-    const ds = $el.attr('data-src');
+    const ds = $el.attr('data-src') || $el.attr('data-original') || $el.attr('data-backup-src') || $el.attr('data-raw-src');
     const src = $el.attr('src');
     const finalSrc = toAbsoluteUrl(originalUrl, ds || src);
     if (finalSrc) {
       const proxied = rewriteToProxy(finalSrc, originalUrl);
       $el.attr('src', proxied);
       $el.removeAttr('data-src');
+      $el.removeAttr('data-original');
+      $el.removeAttr('data-backup-src');
+      $el.removeAttr('data-raw-src');
       $el.removeAttr('crossorigin');
       $el.removeAttr('referrerpolicy');
       $el.removeAttr('nonce');
@@ -189,7 +197,7 @@ function processArticleHtml(html, originalUrl) {
   // Normalize source tags inside picture
   $('source').each((_, el) => {
     const $el = $(el);
-    const ds = $el.attr('data-srcset');
+    const ds = $el.attr('data-srcset') || $el.attr('data-original-set') || $el.attr('data-dsrc');
     const ss = $el.attr('srcset');
     const raw = ds || ss || '';
     if (raw) {
@@ -201,6 +209,8 @@ function processArticleHtml(html, originalUrl) {
       });
       $el.attr('srcset', parts.join(', '));
       $el.removeAttr('data-srcset');
+      $el.removeAttr('data-original-set');
+      $el.removeAttr('data-dsrc');
     }
   });
   // Add base for relative links (if any)
@@ -596,14 +606,24 @@ app.get('/api/proxy', async (req, res) => {
     if (!target || !isAllowedUrl(target)) {
       return res.status(400).send('Invalid target');
     }
-    const response = await axios.get(target, {
+    let fetchUrl = target;
+    try {
+      const h = new URL(target).hostname;
+      if (h === 'mmbiz.qpic.cn') {
+        // 使用微信内部图片获取端点，提升成功率
+        fetchUrl = `https://mp.weixin.qq.com/mp/getimg?url=${encodeURIComponent(target)}`;
+      }
+    } catch {}
+
+    const response = await axios.get(fetchUrl, {
       responseType: 'arraybuffer',
       headers: {
         'Cookie': settings.cookie || '',
         'User-Agent': getUserAgent(),
         'Referer': page || 'https://mp.weixin.qq.com/',
         'Origin': 'https://mp.weixin.qq.com',
-        'Accept': 'image/avif,image/webp,image/apng,image/*,*/*;q=0.8'
+        'Accept': 'image/avif,image/webp,image/apng,image/*,*/*;q=0.8',
+        'Accept-Language': 'zh-CN,zh;q=0.9,en;q=0.8'
       },
       timeout: 15000
     });
