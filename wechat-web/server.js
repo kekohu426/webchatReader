@@ -127,10 +127,13 @@ function getSettings(req) {
     const raw = req.cookies && (req.cookies.WX_AUTH || req.cookies['wx_auth']);
     if (raw) cookieFromClient = Buffer.from(raw, 'base64').toString('utf8');
   } catch {}
+  const envToken = process.env.WECHAT_TOKEN || '';
+  const envCookie = process.env.WECHAT_COOKIE || '';
+  const envFingerprint = process.env.WECHAT_FINGERPRINT || '';
   return {
-    token: sessionSettings.token || headerToken || body.token || '',
-    cookie: sessionSettings.cookie || cookieFromClient || headerCookie || body.cookie || '',
-    fingerprint: sessionSettings.fingerprint || headerFingerprint || body.fingerprint || ''
+    token: sessionSettings.token || headerToken || body.token || envToken || '',
+    cookie: sessionSettings.cookie || cookieFromClient || headerCookie || body.cookie || envCookie || '',
+    fingerprint: sessionSettings.fingerprint || headerFingerprint || body.fingerprint || envFingerprint || ''
   };
 }
 
@@ -245,11 +248,22 @@ function processArticleHtml(html, originalUrl) {
       $el.attr('style', replaced);
     }
   });
-  // Add base for relative links (if any)
-  $('head').prepend(`<base href="${originalUrl}">`);
-  // Ensure body hidden overflow to avoid inner scrollbars
-  $('head').append('<style>body{overflow:hidden!important}</style>');
-  return $.html();
+  // Extract main content area only
+  let mainHtml = '';
+  const main = $('#js_content');
+  if (main && main.length) {
+    mainHtml = main.html();
+  } else {
+    const alt = $('.rich_media_inner');
+    if (alt && alt.length) mainHtml = alt.html();
+    if (!mainHtml) {
+      const article = $('#js_article');
+      if (article && article.length) mainHtml = article.html();
+    }
+    if (!mainHtml) mainHtml = $('body').html() || '';
+  }
+  const sanitized = `<div class="wx-article">${mainHtml || ''}</div>`;
+  return sanitized;
 }
 
 // ================== API 路由 ==================
@@ -299,14 +313,20 @@ app.post('/api/settings', (req, res) => {
 
 // 获取设置
 app.get('/api/settings', (req, res) => {
-  const settings = req.session.settings || {};
+  const settings = getSettings(req);
+  try {
+    if (settings.cookie && !req.cookies.WX_AUTH) {
+      const b64 = Buffer.from(settings.cookie, 'utf8').toString('base64');
+      res.cookie('WX_AUTH', b64, { httpOnly: true, sameSite: 'lax', maxAge: 24 * 60 * 60 * 1000 });
+    }
+  } catch {}
   res.json({ 
     success: true,
     data: {
       hasToken: !!settings.token,
       hasCookie: !!settings.cookie,
       hasFingerprint: !!settings.fingerprint,
-      lastUpdated: settings.lastUpdated || null
+      lastUpdated: (req.session && req.session.settings && req.session.settings.lastUpdated) || null
     }
   });
 });
@@ -539,7 +559,7 @@ app.post('/api/articles', async (req, res) => {
 // 获取文章内容代理
 app.post('/api/article-content', async (req, res) => {
   try {
-    const { url, forceRefresh = false } = req.body;
+    const { url, forceRefresh = false, inline = false } = req.body;
     const settings = getSettings(req);
     
     if (!url) {
@@ -572,7 +592,46 @@ app.post('/api/article-content', async (req, res) => {
       maxContentLength: 50 * 1024 * 1024, // 最大50MB
       maxBodyLength: 50 * 1024 * 1024
     });
-    const processed = processArticleHtml(response.data, url);
+    let processed = processArticleHtml(response.data, url);
+    if (inline) {
+      const $ = cheerio.load(processed, { decodeEntities: false });
+      const tasks = [];
+      const limit = 20;
+      let count = 0;
+      $('img').each((_, el) => {
+        if (count >= limit) return;
+        const src = $(el).attr('src') || '';
+        if (!src) return;
+        if (src.startsWith('/api/proxy')) {
+          try {
+            const u = new URL('http://x' + src);
+            const target = u.searchParams.get('url');
+            const page = u.searchParams.get('page') || url;
+            if (target) {
+              count++;
+              tasks.push((async () => {
+                try {
+                  const resp = await axios.get(target, {
+                    responseType: 'arraybuffer',
+                    headers: {
+                      'Cookie': settings.cookie || '',
+                      'User-Agent': getUserAgent(),
+                      'Referer': page
+                    },
+                    timeout: 12000
+                  });
+                  const ct = resp.headers['content-type'] || 'image/jpeg';
+                  const b64 = Buffer.from(resp.data).toString('base64');
+                  $(el).attr('src', `data:${ct};base64,${b64}`);
+                } catch {}
+              })());
+            }
+          } catch {}
+        }
+      });
+      await Promise.all(tasks);
+      processed = $.html();
+    }
     // 保存到缓存
     storage.articleContent[contentKey] = {
       html: processed,

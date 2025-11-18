@@ -643,7 +643,7 @@ async function showArticleDetail(article) {
       headers: {
         'Content-Type': 'application/json'
       },
-      body: JSON.stringify({ url: article.link })
+      body: JSON.stringify({ url: article.link, inline: true })
     });
     
     if (response.ok) {
@@ -654,13 +654,37 @@ async function showArticleDetail(article) {
         showLoading('正在渲染文章...');
       }
       
+      // 直接内联渲染（优先显示）
+      try {
+        const parser = new DOMParser();
+        const doc = parser.parseFromString(html, 'text/html');
+        const bodyInner = doc.body ? doc.body.innerHTML : html;
+        const inlineEl = document.getElementById('detail-inline');
+        if (inlineEl) {
+          inlineEl.innerHTML = bodyInner;
+          inlineEl.style.display = 'block';
+          elements.detailIframe.style.display = 'none';
+        }
+      } catch {}
+
+      // 同时设置 srcdoc，作为备用方案
       elements.detailIframe.srcdoc = html;
       
       // iframe 加载超时处理
       const iframeTimeout = setTimeout(() => {
+        // 如果内联已经显示，则跳过
+        const inlineEl = document.getElementById('detail-inline');
+        if (inlineEl && inlineEl.style.display === 'block') {
+          hideLoading();
+          return;
+        }
+        try {
+          const dataUrl = 'data:text/html;charset=utf-8,' + encodeURIComponent(html);
+          elements.detailIframe.src = dataUrl;
+        } catch {}
         hideLoading();
-        showToast('文章渲染较慢，请稍候...', 'warning');
-      }, 3000);
+        showToast('文章渲染较慢，已切换备用渲染方式', 'warning');
+      }, 1500);
       
       elements.detailIframe.onload = () => {
         clearTimeout(iframeTimeout);
@@ -706,6 +730,7 @@ async function showArticleDetail(article) {
         const totalTime = Date.now() - loadingStartTime;
         const cacheHit = response.headers.get('X-Cache-Hit') === 'true';
         console.log(`📖 文章加载完成，耗时: ${totalTime}ms, 缓存命中: ${cacheHit}`);
+        showToast('详情已渲染', 'success');
       };
       
       const cacheHit = response.headers.get('X-Cache-Hit') === 'true';
@@ -894,6 +919,15 @@ elements.accountNameInput?.addEventListener('keypress', (e) => {
 elements.btnLoadMore?.addEventListener('click', loadMore);
 elements.btnExport?.addEventListener('click', exportArticles);
 elements.btnBack?.addEventListener('click', backToList);
+document.getElementById('btn-open-external')?.addEventListener('click', () => {
+  const data = window.ReadingEnhancer && window.ReadingEnhancer.currentArticleData;
+  const url = data && (data.link || data.url);
+  if (url) {
+    window.open(url, '_blank');
+  } else {
+    showToast('原文链接不可用', 'warning');
+  }
+});
 
 // 搜索
 elements.searchInput?.addEventListener('input', (e) => {

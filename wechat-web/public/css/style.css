@@ -1216,6 +1216,16 @@ body {
   overflow: hidden; /* 隐藏 iframe 自身滚动条 */
 }
 
+.article-inline {
+  background: #ffffff;
+  color: #111827;
+  line-height: 1.8;
+  font-size: 16px;
+}
+.article-inline img { max-width: 100%; height: auto; display: block; }
+.article-inline p { margin: 1em 0; }
+.article-inline h1, .article-inline h2, .article-inline h3 { margin: 0.8em 0; }
+
 /* 完全隐藏滚动条 */
 .detail-content::-webkit-scrollbar,
 .article-detail::-webkit-scrollbar,
